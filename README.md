@@ -1,6 +1,6 @@
 securecookie
 ============
-[![GoDoc](https://godoc.org/github.com/gorilla/securecookie?status.svg)](https://godoc.org/github.com/gorilla/securecookie) [![Build Status](https://travis-ci.org/gorilla/securecookie.png?branch=master)](https://travis-ci.org/gorilla/securecookie)
+[![GoDoc](https://godoc.org/github.com/gorilla/securecookie?status.svg)](https://godoc.org/github.com/gorilla/securecookie)
 
 securecookie encodes and decodes authenticated and optionally encrypted 
 cookie values.
@@ -9,6 +9,14 @@ Secure cookies can't be forged, because their values are validated using HMAC.
 When encrypted, the content is also inaccessible to malicious eyes. It is still
 recommended that sensitive data not be stored in cookies, and that HTTPS be used
 to prevent cookie [replay attacks](https://en.wikipedia.org/wiki/Replay_attack).
+
+## Fork modifications
+
+The `Decode` method now exposes the cookie's timestamp.
+
+```go
+func (s *SecureCookie) Decode(name, value string, dst interface{}) (time.Time, error)
+```
 
 ## Examples
 

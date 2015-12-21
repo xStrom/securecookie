@@ -113,7 +113,7 @@ var (
 // Codec defines an interface to encode and decode cookie values.
 type Codec interface {
 	Encode(name string, value interface{}) (string, error)
-	Decode(name, value string, dst interface{}) error
+	Decode(name, value string, dst interface{}) (time.Time, error)
 }
 
 // New returns a new SecureCookie.
@@ -293,61 +293,63 @@ func (s *SecureCookie) Encode(name string, value interface{}) (string, error) {
 // The name argument is the cookie name. It must be the same name used when
 // it was stored. The value argument is the encoded cookie value. The dst
 // argument is where the cookie will be decoded. It must be a pointer.
-func (s *SecureCookie) Decode(name, value string, dst interface{}) error {
+func (s *SecureCookie) Decode(name, value string, dst interface{}) (time.Time, error) {
+	var tt time.Time
 	if s.err != nil {
-		return s.err
+		return tt, s.err
 	}
 	if s.hashKey == nil {
 		s.err = errHashKeyNotSet
-		return s.err
+		return tt, s.err
 	}
 	// 1. Check length.
 	if s.maxLength != 0 && len(value) > s.maxLength {
-		return errValueToDecodeTooLong
+		return tt, errValueToDecodeTooLong
 	}
 	// 2. Decode from base64.
 	b, err := decode([]byte(value))
 	if err != nil {
-		return err
+		return tt, err
 	}
 	// 3. Verify MAC. Value is "date|value|mac".
 	parts := bytes.SplitN(b, []byte("|"), 3)
 	if len(parts) != 3 {
-		return ErrMacInvalid
+		return tt, ErrMacInvalid
 	}
 	h := hmac.New(s.hashFunc, s.hashKey)
 	b = append([]byte(name+"|"), b[:len(b)-len(parts[2])-1]...)
 	if err = verifyMac(h, b, parts[2]); err != nil {
-		return err
+		return tt, err
 	}
 	// 4. Verify date ranges.
 	var t1 int64
 	if t1, err = strconv.ParseInt(string(parts[0]), 10, 64); err != nil {
-		return errTimestampInvalid
+		return tt, errTimestampInvalid
 	}
+	tt = time.Unix(t1, 0)
 	t2 := s.timestamp()
 	if s.minAge != 0 && t1 > t2-s.minAge {
-		return errTimestampTooNew
+		return tt, errTimestampTooNew
 	}
 	if s.maxAge != 0 && t1 < t2-s.maxAge {
-		return errTimestampExpired
+		return tt, errTimestampExpired
 	}
 	// 5. Decrypt (optional).
 	b, err = decode(parts[1])
 	if err != nil {
-		return err
+		return tt, err
 	}
 	if s.block != nil {
 		if b, err = decrypt(s.block, b); err != nil {
-			return err
+			return tt, err
 		}
 	}
 	// 6. Deserialize.
 	if err = s.sz.Deserialize(b, dst); err != nil {
-		return cookieError{cause: err, typ: decodeError}
+		return tt, cookieError{cause: err, typ: decodeError}
 	}
 	// Done.
-	return nil
+	return tt, nil
 }
 
 // timestamp returns the current timestamp, in seconds.
@@ -563,7 +565,7 @@ func DecodeMulti(name string, value string, dst interface{}, codecs ...Codec) er
 
 	var errors MultiError
 	for _, codec := range codecs {
-		err := codec.Decode(name, value, dst)
+		_, err := codec.Decode(name, value, dst)
 		if err == nil {
 			return nil
 		}

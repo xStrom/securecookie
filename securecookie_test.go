@@ -44,7 +44,7 @@ func TestSecureCookie(t *testing.T) {
 			continue
 		}
 		dst := make(map[string]interface{})
-		err2 := s1.Decode("sid", encoded, &dst)
+		_, err2 := s1.Decode("sid", encoded, &dst)
 		if err2 != nil {
 			t.Fatalf("%v: %v", err2, encoded)
 		}
@@ -52,7 +52,7 @@ func TestSecureCookie(t *testing.T) {
 			t.Fatalf("Expected %v, got %v.", value, dst)
 		}
 		dst2 := make(map[string]interface{})
-		err3 := s2.Decode("sid", encoded, &dst2)
+		_, err3 := s2.Decode("sid", encoded, &dst2)
 		if err3 == nil {
 			t.Fatalf("Expected failure decoding.")
 		}
@@ -104,7 +104,7 @@ func TestDecodeInvalid(t *testing.T) {
 			base64.StdEncoding,
 			base64.URLEncoding,
 		} {
-			err := s.Decode("name", enc.EncodeToString([]byte(v)), &dst)
+			_, err := s.Decode("name", enc.EncodeToString([]byte(v)), &dst)
 			if err == nil {
 				t.Fatalf("%d: expected failure decoding", i)
 			}
@@ -244,7 +244,7 @@ func TestMissingKey(t *testing.T) {
 	s1 := New(nil, nil)
 
 	var dst []byte
-	err := s1.Decode("sid", "value", &dst)
+	_, err := s1.Decode("sid", "value", &dst)
 	if err != errHashKeyNotSet {
 		t.Fatalf("Expected %#v, got %#v", errHashKeyNotSet, err)
 	}
@@ -267,8 +267,20 @@ func TestCustomType(t *testing.T) {
 	encoded, _ := s1.Encode("sid", src)
 
 	dst := &FooBar{}
-	_ = s1.Decode("sid", encoded, dst)
+	s1.Decode("sid", encoded, dst)
 	if dst.Foo != 42 || dst.Bar != "bar" {
 		t.Fatalf("Expected %#v, got %#v", src, dst)
+	}
+}
+
+func TestLastTimestamp(t *testing.T) {
+	var v, tt int64 = 1234, 4567
+	s1 := New([]byte("12345"), []byte("1234567890123456"))
+	s1.timeFunc = func() int64 { return tt }
+
+	encoded, _ := s1.Encode("sid", v)
+	ttr, _ := s1.Decode("sid", encoded, v)
+	if ttr.Unix() != tt {
+		t.Fatalf("Expected %v, got %v", tt, ttr.Unix())
 	}
 }
